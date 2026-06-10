@@ -1,53 +1,54 @@
-# Treesampler: 树状分层抽样工具
+# Treesampler: Tree-Structured Stratified Sampling
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/LICENSE)
 [![R](https://img.shields.io/badge/R-%3E=3.5.0-blue.svg)](https://www.r-project.org/)
 
-从表格数据中按**树状分层结构**抽取代表性子集，用于代码测试和快速迭代。
+Extract representative subsets from tabular data using **tree-structured stratified sampling** — ideal for fast code prototyping on large datasets.
 
-## 为什么需要 Treesampler？
+## Why Treesampler?
 
-当你面对一个大型数据框（几万到几十万行）时，每次调试代码都要等很久。Treesampler 帮你：
+When working with a large data frame (tens to hundreds of thousands of rows), every debugging cycle takes too long. Treesampler helps you:
 
-1. **按分类变量自动建树** — 将 nominal 变量展开为层级结构
-2. **逐层控制抽样量** — 每层指定抽取多少个节点
-3. **生成可复现的子表** — 保留原始分布特征，体积缩小 10-100 倍
-4. **一键复制 R 代码** — 抽样参数可复现，方便分享
+1. **Auto-build a tree from nominal variables** — expand categorical columns into a hierarchical structure
+2. **Control sampling at each level** — specify how many nodes to sample per parent
+3. **Generate reproducible subsets** — preserve original distribution, reduce size by 10–100x
+4. **Copy R code in one click** — sampling parameters are fully reproducible and shareable
 
-## 安装
+## Installation
 
-### 从 GitHub 安装（推荐）
+### From GitHub (recommended)
 
 ```r
 # install.packages("remotes")
-remotes::install_github("your-username/Treesampler")
+remotes::install_github("rcjhrpyt-droid/treesampler")
 ```
 
-### 本地安装
+### From source
 
 ```r
 # install.packages("devtools")
-devtools::install_local("Treesampler")
+devtools::install_local("treesampler")
 ```
 
-## 快速开始
+## Quick Start
 
-### 方式一：交互式界面（Shiny App）
+### Option 1: Interactive Shiny App
 
 ```r
 library(treesampler)
 run_treesampler_app()
 ```
 
-浏览器会自动打开，支持：
-- 上传 CSV / TSV / Excel / RDS 文件（最大 50MB）
-- 拖拽排序变量层级
-- 可视化确认树结构
-- 配置每层抽样参数
-- 预览并下载结果（CSV / RDS）
-- 一键复制可复现的 R 代码
+A browser window opens automatically with full support for:
 
-### 方式二：函数调用
+- Upload CSV / TSV / Excel / RDS files (max 50 MB)
+- Drag-and-drop variable reordering
+- Visual tree confirmation
+- Per-level sample size configuration
+- Preview & download results (CSV / RDS)
+- One-click copy of reproducible R code
+
+### Option 2: Function Call
 
 ```r
 library(treesampler)
@@ -55,60 +56,60 @@ library(treesampler)
 result <- treesampler(
   data = mtcars,
   nominal_vars = c("cyl", "vs", "am"),
-  samples_per_level = c(2, 2, 2),   # 每层每个父节点抽几个
-  final_n = 3,                       # 最终叶节点随机抽几行
-  seed = 42                          # 随机种子（可复现）
+  samples_per_level = c(2, 2, 2),   # nodes per parent at each level
+  final_n = 3,                       # random rows per leaf node
+  seed = 42                          # reproducible seed
 )
 
-head(result)     # 查看子表
-nrow(result)    # 子表行数
+head(result)     # view the subset
+nrow(result)    # subset row count
 ```
 
-也可以分步调用：
+Or call each step separately:
 
 ```r
-tree <- build_tree(mtcars, c("cyl", "vs"))      # 构建树
-sampled <- sample_tree(tree, c(3, 2))            # 分层抽样
-subset <- extract_subset(mtcars, sampled, c("cyl", "vs"), final_n = 5)  # 提取子表
+tree <- build_tree(mtcars, c("cyl", "vs"))                              # build tree
+sampled <- sample_tree(tree, c(3, 2))                                   # stratified sampling
+subset <- extract_subset(mtcars, sampled, c("cyl", "vs"), final_n = 5)  # extract subset
 ```
 
-## 核心函数
+## Core Functions
 
-| 函数 | 说明 |
-|------|------|
-| `treesampler()` | 一站式：建树 → 抽样 → 提取子表 |
-| `build_tree()` | 从数据和 nominal 变量构建 `data.tree` |
-| `sample_tree()` | 在树上执行逐层分层抽样 |
-| `extract_subset()` | 根据抽样结果从原数据提取行 |
-| `run_treesampler_app()` | 启动 Shiny 交互应用 |
+| Function | Description |
+|----------|-------------|
+| `treesampler()` | All-in-one: build tree → sample → extract subset |
+| `build_tree()` | Build a `data.tree` from nominal variables |
+| `sample_tree()` | Perform per-level stratified sampling on the tree |
+| `extract_subset()` | Extract sampled rows from original data |
+| `run_treesampler_app()` | Launch the interactive Shiny application |
 
-## 算法说明
+## Algorithm
 
-1. **建树阶段**：按用户选择的 nominal 变量顺序，将数据的每一行映射为树的一条路径（最多 10 层）。若不同列存在同名值，内部节点自动添加 `_colN` 后缀区分。
-2. **抽样阶段**：在每个非叶层，对每个父节点随机抽取指定数量的子节点。
-3. **提取阶段**：到达最终层后，从每个叶节点对应的数据行中随机抽取 `final_n` 行。
+1. **Tree Building**: Each row of data is mapped to a tree path according to user-selected nominal variables (max depth 10). If different columns share identical values, internal nodes get an automatic `_colN` suffix.
+2. **Sampling**: At each non-leaf level, randomly select a specified number of child nodes under each parent.
+3. **Extraction**: At the final level, randomly draw `final_n` rows from each leaf node's corresponding data.
 
-总抽样量 ≈ `samples_per_level[1] * samples_per_level[2] * ... * final_n`（受实际数据量限制）。
+Expected total ≈ `samples_per_level[1] * samples_per_level[2] * ... * final_n` (limited by actual data availability).
 
-## 开发
+## Development
 
 ```bash
-git clone https://github.com/your-username/Treesampler.git
-cd Treesampler
-Rscript run_app.R          # 启动 Shiny 开发模式
-devtools::test()           # 运行测试
-devtools::document()       # 更新文档
+git clone https://github.com/rcjhrpyt-droid/treesampler.git
+cd treesampler
+Rscript run_app.R          # launch Shiny dev mode
+devtools::test()           # run tests
+devtools::document()       # update documentation
 ```
 
-## 依赖
+## Dependencies
 
 - **R >= 3.5.0**
 - data.tree, dplyr, shiny, DT, collapsibleTree, readxl, readr
 
-## 许可证
+## License
 
 [MIT](LICENSE)
 
-## 作者
+## Author
 
 wenzhe Huang ([51280155097@stu.ecnu.edu.cn](mailto:51280155097@stu.ecnu.edu.cn))

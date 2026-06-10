@@ -3,11 +3,14 @@ Title: Tree-Structured Sampling from Tabular Data
 Version: 0.1.0
 Authors@R: person(given = "Wenzhe", family = "Huang", role = c("aut", "cre"),
                 email = "51280155097@stu.ecnu.edu.cn")
-Description: Provides tools to build hierarchical tree structures from nominal
-    variables in tabular data and perform stratified sampling at each tree level.
-    Designed for generating representative subsets to test code on, reducing the
-    cost of trial-and-error during data analysis. Includes an interactive Shiny
-    app for visual tree confirmation and sampling configuration.
+Description: A stratified sampling tool that builds a hierarchical tree from
+    categorical variables in tabular data and performs node-level sampling at
+    each layer of the tree. Supports two sampling strategies: 'per-parent'
+    (stratified within each branch) and 'level-wise' (uniform across each
+    level). Designed for rapidly generating small yet representative data
+    subsets for code prototyping and debugging before running analysis on full
+    datasets. Includes an interactive Shiny app for visualizing the tree,
+    configuring sampling parameters, and exporting reproducible R code.
 Imports:
     data.tree,
     dplyr,

@@ -1,0 +1,316 @@
+---
+title: "treesampler 使用手册"
+author: "Wenzhe Huang"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{treesampler 使用手册}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 4.5
+)
+```
+
+```{r setup}
+library(treesampler)
+library(data.tree)
+```
+
+## 1. 包简介
+
+**treesampler** 是一个 R 包，用于从表格数据中按分类变量构建**层次树结构**，并在树的每一层进行**分层抽样**，最终提取出一个规模更小但具有代表性的数据子集。
+
+### 适用场景
+
+- 你有一个**很大的数据集**（数万至数百万行），想先在一个小样本上调试代码
+- 数据包含多个**分类变量**（如地区、产品类别、用户等级），你希望抽样后仍然覆盖这些维度的组合
+- 需要可复现的抽样流程（通过 `seed` 参数固定随机结果）
+
+## 2. 核心函数：`treesampler()`
+
+`treesampler()` 是包的主入口函数，它将"建树 → 抽样 → 提取子集"三个步骤封装为一步调用。
+
+### 基本用法
+
+```{r basic}
+data(iris)
+
+result <- treesampler(
+  data             = iris,
+  nominal_vars     = "Species",        # 按 Species 分层
+  samples_per_level = 2,               # 在 Species 层抽 2 个物种
+  seed             = 42                # 固定随机种子
+)
+
+print(result)
+```
+
+输出是一个 `treesampler` 类的 data.frame，附带采样元信息：
+
+- `n_original`: 原始行数
+- `n_subset`: 子集行数
+- `sampling_method`: 使用的采样策略
+- `nominal_vars`: 分层变量列表
+
+## 3. 参数详解
+
+### 3.1 `nominal_vars` — 分层变量
+
+指定用于构建层次树的列名。变量顺序决定树的层级关系：第一个变量在顶层，最后一个在底层。
+
+```{r multi-level}
+# 将 Sepal.Width 离散化，构造两层树
+iris2 <- iris
+iris2$Sepal.Width_cat <- cut(iris2$Sepal.Width,
+                              breaks = c(2, 3, 3.5, 4.5),
+                              labels = c("窄", "中", "宽"))
+
+result2 <- treesampler(iris2,
+                       nominal_vars     = c("Species", "Sepal.Width_cat"),
+                       samples_per_level = c(2, 2),
+                       seed             = 123)
+print(result2)
+```
+
+> **注意**: `nominal_vars` 最多支持 **10 个**变量。建议使用字符型或因子型列；数值型列如果唯一值 ≤ 12 也会被自动识别为候选。
+
+### 3.2 `samples_per_level` — 每层抽样数量
+
+整数向量，长度应与 `nominal_vars` 相同。每个元素表示在该层抽取多少个节点：
+
+- **正整数 N**: 从该层的可用节点中随机抽 N 个
+- **NA**: 保留该层的所有节点（不做抽样）
+- 如果向量比 `nominal_vars` 短，未指定的层级自动补 NA（保留全部）
+- 如果向量更长，多余的部分会被忽略
+
+```{r samples-per-level}
+# 只在第1层抽样，第2层保留全部
+result_a <- treesampler(iris2,
+                        nominal_vars      = c("Species", "Sepal.Width_cat"),
+                        samples_per_level = c(2, NA),   # 第2层不抽样
+                        seed              = 42)
+
+# 短于 nominal_vars → 自动补 NA
+result_b <- treesampler(iris, "Species",
+                        samples_per_level = 1,  # 只有1个值，第1层之后全补NA
+                        seed = 42)
+```
+
+### 3.3 `method` — 采样策略
+
+这是 treesampler 的核心设计之一，提供两种策略：
+
+#### `"per-parent"` (默认) — 每父节点独立抽样
+
+在每一层，**对每个被选中的父节点分别**从其子节点中抽样。
+
+```
+          Root                    Root
+         / | \                   /   \
+       A   B   C    ──抽样──>   A     C    (B 被排除)
+      /|\  |\            =>    /|\     |
+     1 2 3 4 5                 1 2     6
+```
+
+- A 被选中 → 从 A 的子节点 {1,2,3} 中抽 N 个
+- C 被选中 → 从 C 的子节点 {6} 中抽 N 个（不足则全取）
+- **保证每个选中的上层分支都有下层代表**
+
+#### `"level-wise"` — 整层均匀抽样
+
+在每一层，**将该层所有节点混在一起**，均匀地抽取 N 个，不考虑它们属于哪个父节点。
+
+```
+          Root                    Root
+         / | \                   / | \
+       A   B   C    ──抽样──>   A B C   (整层混在一起抽)
+      /|\  |\            =>     | |
+     1 2 3 4 5                 2 6
+```
+
+- 可能出现某个父节点下所有子节点都被排除的情况
+- 控制更简单，但不保证分支覆盖均衡
+
+#### 对比示例
+
+```{r method-compare}
+set.seed(42)
+
+# per-parent: 每个选中物种内部抽
+pp <- treesampler(iris, "Species",
+                  samples_per_level = 2,
+                  method = "per-parent",
+                  seed = 42)
+
+# level-wise: 整层均匀抽
+lw <- treesampler(iris, "Species",
+                  samples_per_level = 2,
+                  method = "level-wise",
+                  seed = 42)
+
+cat("per-parent 分布:\n")
+print(table(pp$Species))
+
+cat("\nlevel-wise 分布:\n")
+print(table(lw$Species))
+```
+
+> **选择建议**: 大多数情况下使用默认的 `"per-parent"`，它能更好地保持各分支的代表性和均衡性。只有当你只关心每层的总节点数、不在意分布是否均衡时，才考虑 `"level-wise"`。
+
+### 3.4 `final_n` — 最终非分层随机抽样
+
+在完成分层抽样后，对**每个叶子组**内的行再进行一次随机抽样，每组最多保留 `final_n` 行。
+
+```{r final-n}
+data(mtcars)
+
+# 不加 final_n: 每个叶子组有多少行就取多少行
+sub_all <- treesampler(mtcars, "cyl",
+                       samples_per_level = 2,
+                       seed = 42)
+
+# 加 final_n=3: 每个叶子组最多 3 行
+sub_cap <- treesampler(mtcars, "cyl",
+                       samples_per_level = 2,
+                       final_n = 3,
+                       seed = 42)
+
+cat(sprintf("无 final_n: %d 行\n", nrow(sub_all)))
+cat(sprintf("final_n=3: %d 行\n", nrow(sub_cap)))
+cat("\nfinal_n=3 后每组行数:\n")
+print(table(sub_cap$cyl))
+```
+
+这个参数特别适合**叶子组行数差异很大**的场景——某些组合可能有很多行，而另一些很少。`final_n` 可以让最终输出更加均衡。
+
+### 3.5 `seed` — 随机种子
+
+设置后可以完全复现抽样结果：
+
+```{r seed}
+r1 <- treesampler(iris, "Species", 1, seed = 123)
+r2 <- treesampler(iris, "Species", 1, seed = 123)
+identical(r1, r2)  # TRUE
+```
+
+### 3.6 `return_tree` — 返回树对象
+
+设为 `TRUE` 时，结果会附带一个 `data.tree` 对象属性，可用于进一步分析或可视化：
+
+```{r return-tree}
+result_tree <- treesampler(iris, "Species",
+                           samples_per_level = 2,
+                           seed = 42,
+                           return_tree = TRUE)
+
+tree_obj <- attr(result_tree, "sampled_tree")
+print(tree_obj)
+```
+
+## 4. 分步调用（高级用法）
+
+如果你需要对中间过程有更多控制，可以分步调用三个底层函数：
+
+```{r step-by-step}
+# Step 1: 构建完整树
+full_tree <- build_tree(iris, c("Species"))
+cat("完整树节点数:", full_tree$totalCount, "\n")
+
+# Step 2: 对树进行分层采样
+sampled_tree <- sample_tree(full_tree,
+                            samples_per_level = c(2),
+                            method = "per-parent",
+                            seed = 42)
+cat("采样后节点数:", sampled_tree$totalCount, "\n")
+
+# Step 3: 从原始数据中提取对应行的子集
+subset_data <- extract_subset(iris, sampled_tree,
+                              nominal_vars = c("Species"))
+
+cat("最终子集:", nrow(subset_data), "行 (",
+    round(nrow(subset_data)/nrow(iris)*100, 1), "%)\n", sep = "")
+```
+
+| 函数 | 作用 | 输入 | 输出 |
+|------|------|------|------|
+| `build_tree()` | 从数据和分类变量构建层次树 | data.frame + 变量名 | `data.tree::Node` |
+| `sample_tree()` | 在树上进行分层抽样 | 树 + 每层数量 + 方法 | 剪枝后的树 |
+| `extract_subset()` | 按采样的树路径提取原始数据的行 | 原数据 + 采样树 + 变量名 | data.frame |
+
+## 5. 交互式 Shiny App
+
+包还提供了一个交互式界面，适合可视化操作：
+
+```{r shiny, eval=FALSE}
+run_treesampler_shiny()
+```
+
+功能包括：
+- 上传 CSV/Excel/RDS 文件或使用示例数据
+- **拖拽排序**调整变量的层级顺序
+- **可视化树结构**确认后再执行抽样
+- 选择采样策略（per-parent 或 level-wise）
+- 配置每层抽样数量和 final_n
+- 一键下载结果（CSV / RDS）并复制可复现的 R 代码
+
+## 6. 完整实战案例
+
+模拟一份电商用户行为数据，展示 treesampler 的典型工作流：
+
+```{r real-world}
+set.seed(2024)
+n <- 1000
+user_data <- data.frame(
+  user_id  = 1:n,
+  region   = sample(c("华东", "华南", "华北", "西部"), n, replace = TRUE,
+                    prob = c(0.35, 0.25, 0.25, 0.15)),
+  tier     = sample(c("VIP", "普通", "新客"), n, replace = TRUE,
+                    prob = c(0.1, 0.6, 0.30)),
+  channel  = sample(c("App", "Web", "小程序"), n, replace = TRUE),
+  amount   = round(rnorm(n, mean = 200, sd = 80), 2),
+  stringsAsFactors = FALSE
+)
+
+cat("原始数据:", nrow(user_data), "行\n")
+
+# 三层抽样: region > tier > channel, 每层控制数量, final_n 控制每组上限
+user_sub <- treesampler(
+  user_data,
+  nominal_vars      = c("region", "tier", "channel"),
+  samples_per_level = c(3, 2, 2),
+  final_n           = 3,
+  seed              = 99
+)
+
+print(user_sub)
+
+cat("\n子集的区域 x 会员等级分布:\n")
+print(table(user_sub$region, user_sub$tier))
+```
+
+**效果**: 1000 行原始数据 → 仅 36 行 (3.6%)，但覆盖了 3 个区域 × 多个会员等级 × 多个渠道的组合。用这 36 行就可以快速验证你的数据分析代码逻辑，确认无误后再跑全量数据。
+
+## 7. 常见问题
+
+### Q: 连续数值变量可以用吗？
+
+A: 可以，但建议先用 `cut()` 离散化为分组，否则每个唯一值都会成为一个节点，导致树过于庞大。
+
+### Q: 数据中有缺失值怎么办？
+
+A: `build_tree()` 会自动移除 `nominal_vars` 列中有 NA 的行，并给出警告。
+
+### Q: 树太大导致浏览器卡顿怎么办？
+
+A: 减少使用的 `nominal_vars` 数量，或者增大 `samples_per_level` 的值来减少节点总数。当树超过 50,000 个节点时会发出警告。
+
+### Q: 抽样结果不够稳定？
+
+A: 设置 `seed` 参数确保可复现性。不同的 seed 会产生不同的抽样结果，你可以多试几个找到满意的样本。

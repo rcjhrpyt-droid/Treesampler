@@ -151,7 +151,8 @@ ui <- fluidPage(
           h4("3. \u914d\u7f6e\u62bd\u6837\u53c2\u6570"),
           radioButtons("sample_method", "\u62bd\u6837\u7b56\u7565",
             choices = c(
-              "\u6bcf\u7236\u8282\u70b9\u62bd N \u4e2a\u5b50\u8282\u70b9" = "per-parent"
+              "\u6bcf\u7236\u8282\u70b9\u62bd N \u4e2a\u5b50\u8282\u70b9" = "per-parent",
+              "\u6574\u5c42\u5747\u5300\u62bd N \u4e2a\u8282\u70b9" = "level-wise"
             ), selected = "per-parent"
           ),
           br(), uiOutput("sample_size_ui"),
@@ -587,7 +588,7 @@ server <- function(input, output, session) {
 
     tryCatch({
       values$sampled_tree <- sample_tree(values$tree, samples_per_level,
-                                          method = "per-parent", seed = seed_val)
+                                          method = input$sample_method, seed = seed_val)
       values$subset <- extract_subset(user_data(), values$sampled_tree, vars,
                                        final_n = n_final, seed = seed_val)
       values$sampling_done <- TRUE
@@ -621,9 +622,11 @@ server <- function(input, output, session) {
     HTML(sprintf(
       "<b>\u62bd\u6837\u7ed3\u679c</b><br>
        \u539f\u59cb: <b>%d</b> \u884c | \u5b50\u96c6: <b>%d</b> \u884c (<b>%.1f%%</b>)<br>
+       \u7b56\u7565: <b>%s</b><br>
        \u5206\u5c42: %s > L%d:\u4e0d\u5206\u5c42(%d)<br>
        seed: %s",
       orig, sub, pct,
+      input$sample_method,
       level_labels, length(vars)+1, final_n,
       if (is.null(input$seed)||is.na(input$seed)) "\u968f\u673a" else as.character(input$seed)
     ))
@@ -670,10 +673,11 @@ server <- function(input, output, session) {
     seed_txt <- if (is.null(input$seed)||is.na(input$seed)) "NULL" else as.character(input$seed)
 
     sprintf(
-      "# Treesampler: reproducible sampling code\n# Generated: %s\n\nlibrary(treesampler)\n\n# Read your data (uncomment and modify as needed)\n# data <- read.csv('your_file.csv')\nyour_data <- mtcars  # <-- Replace this with your actual data\n\nresult <- treesampler(\n  data = your_data,   # <-- Replace with your data frame\n  nominal_vars = c(%s),\n  samples_per_level = c(%s),\n  final_n = %d,\n  seed = %s\n)\n\nprint(result)\nhead(result)\n",
+      "# Treesampler: reproducible sampling code\n# Generated: %s\n\nlibrary(treesampler)\n\n# Read your data (uncomment and modify as needed)\n# data <- read.csv('your_file.csv')\nyour_data <- mtcars  # <-- Replace this with your actual data\n\nresult <- treesampler(\n  data = your_data,   # <-- Replace with your data frame\n  nominal_vars = c(%s),\n  samples_per_level = c(%s),\n  method = \"%s\",\n  final_n = %d,\n  seed = %s\n)\n\nprint(result)\nhead(result)\n",
       format(Sys.time(), "%y_%m_%d_%H_%M"),
       paste(shQuote(vars), collapse = ", "),
       paste(samples_per_level, collapse = ", "),
+      input$sample_method,
       final_n, seed_txt
     )
   })

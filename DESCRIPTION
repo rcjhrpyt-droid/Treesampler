@@ -1,7 +1,8 @@
 Package: treesampler
 Title: Tree-Structured Sampling from Tabular Data
 Version: 0.1.0
-Authors@R: person("wenzhe", "Huang", email = "51280155097@stu.ecnu.edu.cn", role = c("aut", "cre"))
+Authors@R: person(given = "Wenzhe", family = "Huang", role = c("aut", "cre"),
+                email = "51280155097@stu.ecnu.edu.cn")
 Description: Provides tools to build hierarchical tree structures from nominal
     variables in tabular data and perform stratified sampling at each tree level.
     Designed for generating representative subsets to test code on, reducing the

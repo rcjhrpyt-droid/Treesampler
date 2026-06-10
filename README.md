@@ -77,29 +77,12 @@ Treesampler offers two strategies that control **how nodes are selected at each 
 
 For each parent node selected at the previous level, independently sample N child nodes from its own children.
 
-```
-          Root                    Root
-         / | \                   /   \
-       A   B   C    ──sample──>   A     C    (B dropped)
-      /|\  |\            =>    /|\     |
-     1 2 3 4 5                 1 2     6
-```
-
 - Every selected branch gets downstream representation
 - Tree stays balanced across branches
-- **Recommended for most use cases**
 
 ### `method = "level-wise"`
 
 Pool all nodes at each level together, then uniformly sample N regardless of which parent they belong to.
-
-```
-          Root                    Root
-         / | \                   / | \
-       A   B   C    ──sample──>   A B C   (pooled)
-      /|\  |\            =>     | |
-     1 2 3 4 5                 2 6
-```
 
 - Simpler control over total node count per level
 - Some branches may end up empty

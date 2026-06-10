@@ -24,3 +24,4 @@ Thumbs.db
 # Development scripts (not part of package)
 test_verify.R
 run_app.R
+.Rproj.user

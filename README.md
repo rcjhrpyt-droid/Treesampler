@@ -23,13 +23,6 @@ When working with a large data frame (tens to hundreds of thousands of rows), ev
 remotes::install_github("rcjhrpyt-droid/treesampler")
 ```
 
-### From source
-
-```r
-# install.packages("devtools")
-devtools::install_local("treesampler")
-```
-
 ## Quick Start
 
 ### Option 1: Interactive Shiny App
@@ -91,16 +84,6 @@ subset <- extract_subset(mtcars, sampled, c("cyl", "vs"), final_n = 5)  # extrac
 
 Expected total ≈ `samples_per_level[1] * samples_per_level[2] * ... * final_n` (limited by actual data availability).
 
-## Development
-
-```bash
-git clone https://github.com/rcjhrpyt-droid/treesampler.git
-cd treesampler
-Rscript run_app.R          # launch Shiny dev mode
-devtools::test()           # run tests
-devtools::document()       # update documentation
-```
-
 ## Dependencies
 
 - **R >= 3.5.0**
@@ -109,7 +92,3 @@ devtools::document()       # update documentation
 ## License
 
 [MIT](LICENSE)
-
-## Author
-
-wenzhe Huang ([51280155097@stu.ecnu.edu.cn](mailto:51280155097@stu.ecnu.edu.cn))

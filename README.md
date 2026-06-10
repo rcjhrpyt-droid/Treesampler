@@ -108,14 +108,6 @@ Pool all nodes at each level together, then uniformly sample N regardless of whi
 
 Expected total rows ~ `samples_per_level[1] * samples_per_level[2] * ... * final_n` (limited by actual data availability).
 
-## Documentation
-
-For detailed usage examples, parameter explanations, and a full walkthrough, see the package vignette:
-
-```r
-vignette("treesampler-manual", package = "treesampler")
-```
-
 ## Dependencies
 
 - **R >= 3.5.0**
